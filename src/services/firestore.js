@@ -14,20 +14,20 @@ if (!admin.apps.length) {
 const db = admin.firestore();
 
 async function storeNeed(parsedReport, priorityScore, senderNumber, rawInput) {
-  const needData = {
+  const jobData = {
     ...parsedReport,
-    priority_score: priorityScore,
+    profile_score: priorityScore,
     sender_number: senderNumber,
     raw_input: rawInput,
     status: 'open',
     reported_at: admin.firestore.FieldValue.serverTimestamp(),
     updated_at: admin.firestore.FieldValue.serverTimestamp(),
-    assigned_volunteer_id: null,
-    assigned_at: null,
+    matched_to: null,
+    matched_at: null,
   };
 
-  const docRef = await db.collection('needs').add(needData);
-  console.log(`Stored need: ${docRef.id}, priority: ${priorityScore}`);
+  const docRef = await db.collection('jobs').add(jobData);
+  console.log(`Stored job profile: ${docRef.id}, score: ${priorityScore}`);
   return docRef.id;
 }
 

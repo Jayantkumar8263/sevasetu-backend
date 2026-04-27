@@ -4,92 +4,120 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
 
 const PARSING_PROMPT = `
-You are an AI assistant for SevaSetu, a disaster relief and volunteer coordination platform in India.
+You are an AI assistant for RozgarBot, a platform that connects daily wage workers with local job opportunities in India.
 
-A field worker has submitted a report. Extract structured information from it.
-The report may be in Hindi, Chhattisgarhi, English, or Hinglish.
+A worker has sent a message describing themselves or a job seeker has described what they need.
+The message may be in Hindi, Chhattisgarhi, English, or Hinglish.
 
 Return ONLY a valid JSON object with this exact structure. No explanation, no markdown, no code fences:
 {
-  "location": "specific area, ward, or address mentioned (string, or null if not mentioned)",
-  "problem_type": "one of: food_shortage, flood, medical, shelter, rescue, infrastructure, other",
-  "severity": <integer 1-10, where 10 is life-threatening>,
-  "people_affected": <integer estimate, or null if not mentioned>,
-  "resources_needed": ["list", "of", "resources", "mentioned"],
+  "role": "worker | employer",
+  "skills": ["plumber", "painter", "electrician", "carpenter", "mason", "cleaner", "driver", "helper", "other"],
+  "location": "city, area, or neighbourhood mentioned (string, or null if not mentioned)",
+  "experience_years": <integer or null if not mentioned>,
+  "availability": "immediate | this_week | flexible | null",
+  "wage_expectation": "daily wage amount mentioned in INR, or null",
+  "job_description": "what work is needed (for employer) or what work can be done (for worker)",
   "original_language": "hindi | english | hinglish | chhattisgarhi | other",
-  "translated_summary": "1-2 sentence English summary of what is needed",
-  "urgency_keywords": ["urgent", "words", "found"],
+  "translated_summary": "1-2 sentence English summary",
   "confidence": <float 0.0-1.0>
 }
 
 If you cannot extract meaningful information, return:
-{"error": "Could not parse report", "confidence": 0.0}
+{"error": "Could not parse message", "confidence": 0.0}
 `;
 
-async function parseTextReport(text) {
-  try {
-    const result = await model.generateContent([
-      PARSING_PROMPT,
-      `Field report: "${text}"`
-    ]);
+async function parseTextReport(text, retries = 3) {
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      const result = await model.generateContent([
+        PARSING_PROMPT,
+        `Worker/Employer message: "${text}"`
+      ]);
 
-    const responseText = result.response.text().trim();
-    const cleaned = responseText.replace(/```json|```/g, '').trim();
-    return JSON.parse(cleaned);
+      const responseText = result.response.text().trim();
+      const cleaned = responseText.replace(/```json|```/g, '').trim();
+      return JSON.parse(cleaned);
 
-  } catch (error) {
-    if (error instanceof SyntaxError) {
-      console.error('Gemini returned non-JSON response');
-      return { error: 'Parsing failed: invalid response format', confidence: 0 };
+    } catch (error) {
+      const retryInfo = error?.errorDetails?.find(
+        d => d['@type']?.includes('RetryInfo')
+      );
+      const retryDelay = retryInfo?.retryDelay;
+      const delayMs = retryDelay
+        ? parseInt(retryDelay) * 1000
+        : attempt * 5000;
+
+      if (attempt < retries && error.status === 429) {
+        console.log(`Gemini rate limited. Retrying in ${delayMs / 1000}s...`);
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+        continue;
+      }
+
+      if (error instanceof SyntaxError) {
+        console.error('Gemini returned non-JSON response');
+        return { error: 'Parsing failed: invalid response format', confidence: 0 };
+      }
+
+      throw error;
     }
-    throw error;
   }
 }
 
-async function parseVoiceReport(base64AudioData, mimeType) {
-  try {
-    const audioPart = {
-      inlineData: {
-        data: base64AudioData,
-        mimeType: mimeType,
-      },
-    };
+async function parseVoiceReport(base64AudioData, mimeType, retries = 3) {
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      const audioPart = {
+        inlineData: {
+          data: base64AudioData,
+          mimeType: mimeType,
+        },
+      };
 
-    const result = await model.generateContent([
-      PARSING_PROMPT,
-      'The following is a voice note from a field worker. Transcribe it then extract structured information:',
-      audioPart,
-    ]);
+      const result = await model.generateContent([
+        PARSING_PROMPT,
+        'The following is a voice note. Transcribe it then extract structured information:',
+        audioPart,
+      ]);
 
-    const responseText = result.response.text().trim();
-    const cleaned = responseText.replace(/```json|```/g, '').trim();
-    return JSON.parse(cleaned);
+      const responseText = result.response.text().trim();
+      const cleaned = responseText.replace(/```json|```/g, '').trim();
+      return JSON.parse(cleaned);
 
-  } catch (error) {
-    if (error instanceof SyntaxError) {
-      console.error('Gemini returned non-JSON response for audio');
-      return { error: 'Audio parsing failed', confidence: 0 };
+    } catch (error) {
+      const retryInfo = error?.errorDetails?.find(
+        d => d['@type']?.includes('RetryInfo')
+      );
+      const retryDelay = retryInfo?.retryDelay;
+      const delayMs = retryDelay
+        ? parseInt(retryDelay) * 1000
+        : attempt * 5000;
+
+      if (attempt < retries && error.status === 429) {
+        console.log(`Gemini rate limited. Retrying in ${delayMs / 1000}s...`);
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+        continue;
+      }
+
+      if (error instanceof SyntaxError) {
+        console.error('Gemini returned non-JSON response for audio');
+        return { error: 'Audio parsing failed', confidence: 0 };
+      }
+
+      throw error;
     }
-    throw error;
   }
 }
 
 function calculatePriorityScore(parsedReport) {
-  const { severity = 5, people_affected = 0, urgency_keywords = [] } = parsedReport;
-
-  const peopleScore = Math.min(people_affected || 0, 1000) / 100;
-
-  const urgentWords = ['urgent', 'emergency', 'help', 'rescue', 'trapped', 'dying',
-                       'phaas', 'bachao', 'madat', 'aapda', 'khatre'];
-  const urgencyBonus = Math.min(
-    urgency_keywords.filter(k =>
-      urgentWords.some(u => k.toLowerCase().includes(u))
-    ).length * 2,
-    10
-  );
-
-  const score = (severity * 0.4) + (Math.min(peopleScore, 10) * 0.3) + (urgencyBonus * 0.3);
-  return Math.round(Math.min(score, 10) * 10) / 10;
+  // For RozgarBot, score = how complete the profile is (0-10)
+  let score = 0;
+  if (parsedReport.skills?.length > 0) score += 3;
+  if (parsedReport.location) score += 3;
+  if (parsedReport.experience_years) score += 2;
+  if (parsedReport.availability && parsedReport.availability !== 'null') score += 1;
+  if (parsedReport.wage_expectation) score += 1;
+  return score;
 }
 
 module.exports = { parseTextReport, parseVoiceReport, calculatePriorityScore };
