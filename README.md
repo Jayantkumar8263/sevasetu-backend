@@ -1,4 +1,4 @@
-# SevaSetu Backend
+# Roojgar Bot
 
 WhatsApp-based field reporting backend for disaster relief coordination.
 
