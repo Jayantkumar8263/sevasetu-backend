@@ -4,6 +4,7 @@ const webhookRouter = require('./routes/webhook');
 const { generalLimiter } = require('./middleware/rateLimiter');
 
 const app = express();
+
 app.set('trust proxy', 1);
 
 app.use(

@@ -6,18 +6,22 @@ const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
 const PARSING_PROMPT = `
 You are an AI assistant for RozgarBot, a platform that connects daily wage workers with local job opportunities in India.
 
-A worker has sent a message describing themselves or a job seeker has described what they need.
+A user has sent a message. They are either:
+- A CUSTOMER who needs work done at their home/office
+- A WORKER who is looking for jobs
+
 The message may be in Hindi, Chhattisgarhi, English, or Hinglish.
 
 Return ONLY a valid JSON object with this exact structure. No explanation, no markdown, no code fences:
 {
-  "role": "worker | employer",
-  "skills": ["plumber", "painter", "electrician", "carpenter", "mason", "cleaner", "driver", "helper", "other"],
+  "role": "worker | customer | unknown",
+  "skills": ["skill1", "skill2"],
   "location": "city, area, or neighbourhood mentioned (string, or null if not mentioned)",
+  "city": "just the city name in lowercase (raipur, bhopal, etc.) or null",
   "experience_years": <integer or null if not mentioned>,
   "availability": "immediate | this_week | flexible | null",
-  "wage_expectation": "daily wage amount mentioned in INR, or null",
-  "job_description": "what work is needed (for employer) or what work can be done (for worker)",
+  "wage_expectation": "daily wage amount in INR or null",
+  "job_description": "what work is needed or what work can be done (1 sentence)",
   "original_language": "hindi | english | hinglish | chhattisgarhi | other",
   "translated_summary": "1-2 sentence English summary",
   "confidence": <float 0.0-1.0>
@@ -32,7 +36,7 @@ async function parseTextReport(text, retries = 3) {
     try {
       const result = await model.generateContent([
         PARSING_PROMPT,
-        `Worker/Employer message: "${text}"`
+        `User message: "${text}"`
       ]);
 
       const responseText = result.response.text().trim();
@@ -110,7 +114,6 @@ async function parseVoiceReport(base64AudioData, mimeType, retries = 3) {
 }
 
 function calculatePriorityScore(parsedReport) {
-  // For RozgarBot, score = how complete the profile is (0-10)
   let score = 0;
   if (parsedReport.skills?.length > 0) score += 3;
   if (parsedReport.location) score += 3;

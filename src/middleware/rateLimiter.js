@@ -12,12 +12,11 @@ const senderMessageCounts = new Map();
 
 const whatsappSenderLimiter = (req, res, next) => {
   const sender = req.body?.From;
-
   if (!sender) return next();
 
   const now = Date.now();
   const windowMs = 60 * 1000;
-  const maxMessages = 10;
+  const maxMessages = 15;
 
   const record = senderMessageCounts.get(sender) || { count: 0, windowStart: now };
 
@@ -32,7 +31,7 @@ const whatsappSenderLimiter = (req, res, next) => {
   if (record.count > maxMessages) {
     console.warn(`Rate limit hit for sender: ${sender}`);
     return res.status(429).send(
-      `<Response><Message>You're sending too many messages. Please wait a minute.</Message></Response>`
+      `<Response><Message>Aap bahut zyada messages bhej rahe hain. Kripya 1 minute baad try karein.</Message></Response>`
     );
   }
 
