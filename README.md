@@ -19,7 +19,7 @@ WhatsApp-based field reporting backend for disaster relief coordination.
 ### Installation
 ```bash
 git clone https://github.com/Jayantkumar8263/sevasetu-backend
-cd sevasetu-backend
+cd Rozgar_bot-backend
 npm install
 ```
 
