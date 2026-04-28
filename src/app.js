@@ -19,7 +19,7 @@ app.use(express.json());
 app.use(generalLimiter);
 
 app.get('/health', (req, res) => {
-  res.status(200).json({ status: 'ok', service: 'sevasetu-backend' });
+  res.status(200).json({ status: 'ok', service: 'rozgarbot-backend' });
 });
 
 app.use('/webhook', webhookRouter);
@@ -35,7 +35,7 @@ app.use((err, req, res, next) => {
 
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {
-  console.log(`SevaSetu backend running on port ${PORT}`);
+  console.log(`RozgarBot backend running on port ${PORT}`);
 });
 
 module.exports = app;
